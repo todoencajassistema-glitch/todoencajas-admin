@@ -719,6 +719,50 @@ function Pedidos({ toast, usuario }) {
   const filtrados = pedidos.filter(p => filtro === "todos" || p.estatus === filtro);
 
   const cambiarEstatus = async (id, estatus, notas) => {
+    const pedidoActual = pedidos.find(p => p.id === id);
+
+    // Si cambia a "confirmado" y antes NO era confirmado → descontar stock
+    if (estatus === "confirmado" && pedidoActual?.estatus !== "confirmado") {
+      try {
+        const items = typeof pedidoActual.items === "string"
+          ? JSON.parse(pedidoActual.items)
+          : pedidoActual.items || [];
+
+        for (const item of items) {
+          // Obtener stock actual
+          const prods = await sb.get("productos", `?id=eq.${item.id}&select=id,stock`);
+          if (prods && prods.length > 0) {
+            const nuevoStock = Math.max(0, (prods[0].stock || 0) - (item.qty || 1));
+            await sb.patch("productos", item.id, { stock: nuevoStock });
+          }
+        }
+        toast.add("✅ Stock descontado del inventario");
+      } catch(e) {
+        console.error("Error descontando stock:", e);
+        toast.add("⚠️ Error al descontar stock", "error");
+      }
+    }
+
+    // Si cambia de "confirmado" a otro estado (ej. cancelado) → restaurar stock
+    if (pedidoActual?.estatus === "confirmado" && estatus === "cancelado") {
+      try {
+        const items = typeof pedidoActual.items === "string"
+          ? JSON.parse(pedidoActual.items)
+          : pedidoActual.items || [];
+
+        for (const item of items) {
+          const prods = await sb.get("productos", `?id=eq.${item.id}&select=id,stock`);
+          if (prods && prods.length > 0) {
+            const stockRestaurado = (prods[0].stock || 0) + (item.qty || 1);
+            await sb.patch("productos", item.id, { stock: stockRestaurado });
+          }
+        }
+        toast.add("↩️ Stock restaurado por cancelación");
+      } catch(e) {
+        console.error("Error restaurando stock:", e);
+      }
+    }
+
     await sb.patch("pedidos", id, { estatus, notas });
     setPedidos(prev => prev.map(p => p.id === id ? { ...p, estatus, notas } : p));
     setDetalle(prev => prev ? { ...prev, estatus, notas } : null);
