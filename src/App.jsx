@@ -352,7 +352,7 @@ function Productos({ toast }) {
 
   const cargar = () => {
     setLoading(true);
-    sb.get("productos", "?order=categoria,nombre").then(d => { setProductos(d); setLoading(false); });
+    sb.get("productos", "?order=categoria,nombre&select=*").then(d => { setProductos(d); setLoading(false); });
   };
 
   useEffect(() => { cargar(); }, []);
@@ -478,9 +478,10 @@ function ModalProducto({ prod, onClose, onSaved, toast }) {
     categoria:   prod?.categoria   || "",
     precio:      prod?.precio      || "",
     stock:       prod?.stock       || "",
-    tipo_carton: prod?.tipo_carton || "",
-    resistencia: prod?.resistencia || "",
-    peso_max:    prod?.peso_max    || "",
+    material:    prod?.material    || "",
+    resistencia:    prod?.resistencia    || "",
+    cantidad_atado: prod?.cantidad_atado || "",
+    precio_atado:   prod?.precio_atado   || "",
     largo:       prod?.largo       || "",
     ancho:       prod?.ancho       || "",
     alto:        prod?.alto        || "",
@@ -541,9 +542,8 @@ function ModalProducto({ prod, onClose, onSaved, toast }) {
       categoria:   form.categoria,
       precio:      parseFloat(form.precio) || 0,
       stock:       parseInt(form.stock)    || 0,
-      tipo_carton: form.tipo_carton,
+      material:    form.material,
       resistencia: form.resistencia,
-      peso_max:    parseFloat(form.peso_max) || null,
       largo:       parseFloat(form.largo)    || null,
       ancho:       parseFloat(form.ancho)    || null,
       alto:        parseFloat(form.alto)     || null,
@@ -607,7 +607,10 @@ function ModalProducto({ prod, onClose, onSaved, toast }) {
               <label>Categoría</label>
               <select value={form.categoria} onChange={setF("categoria")}>
                 <option value="">Sin categoría</option>
-                <option>Cajas Regulares</option>
+                <option>Saldos</option>
+                <option>Alimentos y Bebidas</option>
+                <option>Material de Embalaje</option>
+                <option>Cajas Armables</option>
                 <option>Cajas para Envío</option>
                 <option>Cajas Especiales</option>
                 <option>Contenedores</option>
@@ -640,28 +643,55 @@ function ModalProducto({ prod, onClose, onSaved, toast }) {
               <label>Alto (cm)</label>
               <input type="number" step="0.1" placeholder="0" value={form.alto} onChange={setF("alto")} />
             </div>
+            <div style={{ gridColumn: "1/-1", fontSize: 12, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".8px", paddingTop: 4, paddingBottom: 4, borderBottom: "1px solid #f0ede8" }}>
+              Precio por atado
+            </div>
             <div className="field">
-              <label>Carga máx. (kg)</label>
-              <input type="number" step="0.1" placeholder="0" value={form.peso_max} onChange={setF("peso_max")} />
+              <label>Cantidad del atado (pzas)</label>
+              <input type="number" placeholder="Ej. 50" value={form.cantidad_atado} onChange={setF("cantidad_atado")} />
+            </div>
+            <div className="field">
+              <label>Precio del atado (MXN)</label>
+              <input type="number" step="0.01" placeholder="0.00" value={form.precio_atado} onChange={setF("precio_atado")} />
             </div>
 
             <div style={{ gridColumn: "1/-1", fontSize: 12, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".8px", paddingTop: 4, paddingBottom: 4, borderBottom: "1px solid #f0ede8" }}>
               Material
             </div>
             <div className="field">
-              <label>Tipo de cartón</label>
-              <select value={form.tipo_carton} onChange={setF("tipo_carton")}>
+              <label>Material</label>
+              <select value={form.material} onChange={setF("material")}>
                 <option value="">—</option>
-                <option>Corrugado simple</option>
+                <option>Caple</option>
+                <option>SBS</option>
+                <option>Microcorrugado</option>
+                <option>Corrugado</option>
                 <option>Doble corrugado</option>
-                <option>Triple corrugado</option>
-                <option>Cartón liso</option>
+                <option>Rígido</option>
+                <option>Bond</option>
+                <option>PET</option>
+                <option>Lámina</option>
               </select>
             </div>
-            <div className="field">
-              <label>Resistencia</label>
-              <input placeholder="Ej. ECT-32, BCT-150kg" value={form.resistencia} onChange={setF("resistencia")} />
-            </div>
+            {/* Campo dinámico según material */}
+            {["Caple","SBS","PET"].includes(form.material) && (
+              <div className="field">
+                <label>Calibre</label>
+                <input placeholder="Ej. 14pt, 18pt" value={form.resistencia} onChange={setF("resistencia")} />
+              </div>
+            )}
+            {["Bond"].includes(form.material) && (
+              <div className="field">
+                <label>Gramaje</label>
+                <input placeholder="Ej. 90g/m², 120g/m²" value={form.resistencia} onChange={setF("resistencia")} />
+              </div>
+            )}
+            {["Microcorrugado","Corrugado","Doble corrugado"].includes(form.material) && (
+              <div className="field">
+                <label>Resistencia</label>
+                <input placeholder="Ej. ECT-32, BCT-150kg" value={form.resistencia} onChange={setF("resistencia")} />
+              </div>
+            )}
 
             <div className="field form-full">
               <label>Descripción</label>
@@ -857,11 +887,41 @@ function Pedidos({ toast, usuario }) {
 }
 
 // ─── Modal Pedido ─────────────────────────────────────────────────────────────
+function getMsgWA(pedido, costoEnvio = "") {
+  const id = pedido.id;
+  const nombre = pedido.nombre;
+  const tel = pedido.telefono?.replace(/\D/g, "");
+  const entrega = pedido.entrega;
+  const subtotal = pedido.subtotal || 0;
+  const esGratis = entrega === "cdmx" && subtotal >= 8000;
+
+  let msg = "";
+  if (entrega === "tienda") {
+    msg = `Hola ${nombre}, recibimos tu pedido #${id} ✅. Ya está siendo procesado. Te avisamos en cuanto esté listo para recoger en tienda. ¡Gracias por tu compra en Todo en Cajas! 📦`;
+  } else if (entrega === "cdmx" && esGratis) {
+    msg = `Hola ${nombre}, recibimos tu pedido #${id} ✅. Tu pedido supera los $8,000 por lo que el envío es *completamente gratis* 🎉. En breve coordinamos la entrega. ¿A qué hora te queda mejor recibirlo?`;
+  } else if (entrega === "cdmx" && !esGratis) {
+    msg = `Hola ${nombre}, recibimos tu pedido #${id} ✅. Para la entrega en CDMX el costo de envío a tu zona es de *$${costoEnvio || "___"}*. ¿Confirmamos el pedido con ese costo?`;
+  } else {
+    msg = `Hola ${nombre}, recibimos tu pedido #${id} ✅. Para el envío a *${pedido.estado || "tu estado"}* el costo por paquetería es de *$${costoEnvio || "___"}*. ¿Confirmamos?`;
+  }
+  return { url: `https://wa.me/52${tel}?text=${encodeURIComponent(msg)}`, esGratis, entrega };
+}
+
+function getMsgEntregado(pedido) {
+  const tel = pedido.telefono?.replace(/\D/g, "");
+  const msg = `Hola ${pedido.nombre}, tu pedido #${pedido.id} fue entregado con éxito ✅. ¡Muchas gracias por tu compra en Todo en Cajas! Si necesitas algo más, aquí estamos 📦`;
+  return `https://wa.me/52${tel}?text=${encodeURIComponent(msg)}`;
+}
+
 function ModalPedido({ pedido, onClose, onCambiarEstatus }) {
-  const [estatus, setEstatus] = useState(pedido.estatus);
-  const [notas, setNotas]     = useState(pedido.notas || "");
+  const [estatus, setEstatus]     = useState(pedido.estatus);
+  const [notas, setNotas]         = useState(pedido.notas || "");
+  const [costoEnvio, setCostoEnvio] = useState("");
   const ec = ESTATUS_COLORES[estatus] || ESTATUS_COLORES.pendiente;
   const items = typeof pedido.items === "string" ? JSON.parse(pedido.items) : pedido.items || [];
+  const necesitaCosto = (pedido.entrega === "cdmx" && (pedido.subtotal || 0) < 8000) || pedido.entrega === "foraneo";
+  const waInfo = getMsgWA(pedido, costoEnvio);
 
   return (
     <div className="modal-ov" onClick={onClose}>
@@ -871,6 +931,7 @@ function ModalPedido({ pedido, onClose, onCambiarEstatus }) {
           <button className="btn btn-secondary btn-sm" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
           {/* Cliente */}
           <div style={{ background: "#fafaf8", border: "1.5px solid #f0ede8", borderRadius: 12, padding: "14px 16px" }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".8px", marginBottom: 8 }}>Cliente</div>
@@ -898,6 +959,48 @@ function ModalPedido({ pedido, onClose, onCambiarEstatus }) {
                 <span>Subtotal</span>
                 <span style={{ color: ORANGE }}>{fmt(pedido.subtotal)}</span>
               </div>
+            </div>
+          </div>
+
+          {/* Notificar al cliente por WhatsApp */}
+          <div style={{ background: "#f0fdf4", border: "1.5px solid #bbf7d0", borderRadius: 12, padding: "14px 16px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#166534", textTransform: "uppercase", letterSpacing: ".8px", marginBottom: 10 }}>
+              💬 Notificar al cliente por WhatsApp
+            </div>
+
+            {/* Si necesita costo de envío, mostrar campo */}
+            {necesitaCosto && (
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: ".8px", display: "block", marginBottom: 4 }}>
+                  Costo de envío a cotizar ($)
+                </label>
+                <input
+                  type="number"
+                  placeholder="Ej. 150"
+                  value={costoEnvio}
+                  onChange={e => setCostoEnvio(e.target.value)}
+                  style={{ border: "1.5px solid #e5e1db", borderRadius: 8, padding: "7px 12px", fontSize: 14, fontFamily: "Inter,sans-serif", outline: "none", width: "100%" }}
+                />
+                <p style={{ fontSize: 11, color: "#aaa", marginTop: 4 }}>Llena el costo antes de enviar el mensaje al cliente.</p>
+              </div>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {/* Botón confirmar pedido */}
+              <a href={waInfo.url} target="_blank" rel="noopener noreferrer"
+                style={{ background: "#25D366", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
+                <span>💬</span>
+                {pedido.entrega === "tienda" ? "Confirmar — Recoger en tienda"
+                  : waInfo.esGratis ? "Confirmar — Envío gratis CDMX 🎉"
+                  : pedido.entrega === "cdmx" ? "Confirmar — Cotizar envío CDMX"
+                  : "Confirmar — Cotizar envío foráneo"}
+              </a>
+
+              {/* Botón entregado */}
+              <a href={getMsgEntregado(pedido)} target="_blank" rel="noopener noreferrer"
+                style={{ background: "#166534", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
+                <span>✅</span> Notificar entrega al cliente
+              </a>
             </div>
           </div>
 
