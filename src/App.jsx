@@ -191,7 +191,51 @@ tr:hover td { background:#fafaf8; }
   .sidebar { display:none; }
   .form-grid { grid-template-columns:1fr; }
   .fotos-grid { grid-template-columns:repeat(3,1fr); }
-  .page-body { padding:16px; }
+  .page-body { padding:16px 14px 80px; }
+  .page-header { padding:14px 16px; }
+  .page-title { font-size:17px; }
+  .table-wrap { overflow-x:auto; }
+  .modal { border-radius:0; max-height:100vh; height:100vh; }
+  .modal-ov { padding:0; align-items:flex-end; }
+}
+
+/* BARRA NAVEGACIÓN INFERIOR MÓVIL */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: #1a1a1a;
+  border-top: 1px solid rgba(255,255,255,.1);
+  z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.bottom-nav-inner {
+  display: flex;
+  align-items: stretch;
+}
+.bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 4px 8px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: #666;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  gap: 3px;
+  transition: color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.bottom-nav-item.active { color: #E8681A; }
+.bottom-nav-item .ico { font-size: 20px; line-height: 1; }
+@media(max-width:768px){
+  .bottom-nav { display: block; }
+  .layout { padding-bottom: 0; }
 }
 `;
 
@@ -1175,7 +1219,35 @@ function Ajustes({ usuario, toast }) {
   );
 }
 
-// ─── App ──────────────────────────────────────────────────────────────────────
+function BottomNav({ usuario, pagina, setPagina, onLogout }) {
+  const isAdmin = usuario.rol === "admin";
+  const items = [
+    ...(isAdmin ? [{ id: "dashboard", ico: "📊", label: "Inicio" }] : []),
+    ...(isAdmin ? [{ id: "productos", ico: "📦", label: "Productos" }] : []),
+    { id: "pedidos", ico: "🛒", label: "Pedidos" },
+    ...(isAdmin ? [{ id: "reportes", ico: "📈", label: "Reportes" }] : []),
+    ...(isAdmin ? [{ id: "ajustes", ico: "⚙️", label: "Ajustes" }] : []),
+  ];
+  return (
+    <nav className="bottom-nav">
+      <div className="bottom-nav-inner">
+        {items.map(item => (
+          <button key={item.id} className={`bottom-nav-item${pagina === item.id ? " active" : ""}`}
+            onClick={() => setPagina(item.id)}>
+            <span className="ico">{item.ico}</span>
+            {item.label}
+          </button>
+        ))}
+        <button className="bottom-nav-item" onClick={onLogout}>
+          <span className="ico">🚪</span>
+          Salir
+        </button>
+      </div>
+    </nav>
+  );
+}
+
+
 export default function AdminApp() {
   const [usuario, setUsuario] = useState(null);
   const [pagina, setPagina]   = useState("dashboard");
@@ -1208,6 +1280,7 @@ export default function AdminApp() {
           {pagina === "reportes"  && usuario.rol === "admin" && <><div className="page-header"><span className="page-title">📈 Reportes</span></div><Reportes/></>}
           {pagina === "ajustes"   && usuario.rol === "admin" && <><div className="page-header"><span className="page-title">⚙️ Ajustes</span></div><Ajustes usuario={usuario} toast={toast}/></>}
         </div>
+        <BottomNav usuario={usuario} pagina={pagina} setPagina={setPagina} onLogout={() => setUsuario(null)} />
       </div>
       <ToastContainer toasts={toast.toasts} />
     </>
