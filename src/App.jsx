@@ -50,11 +50,14 @@ function fmt(n) { return new Intl.NumberFormat("es-MX", { style: "currency", cur
 function fmtDate(d) { return new Date(d).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
 
 const ESTATUS_COLORES = {
-  pendiente:  { bg: "#fff7ed", color: "#9a3412", border: "#fed7aa" },
-  confirmado: { bg: "#eff6ff", color: "#1e40af", border: "#bfdbfe" },
-  en_proceso: { bg: "#fefce8", color: "#854d0e", border: "#fde68a" },
-  entregado:  { bg: "#f0fdf4", color: "#166534", border: "#bbf7d0" },
-  cancelado:  { bg: "#fef2f2", color: "#991b1b", border: "#fecaca" },
+  recibido:       { bg: "#fff7ed", color: "#9a3412",  border: "#fed7aa" },
+  pago_recibido:  { bg: "#eff6ff", color: "#1e40af",  border: "#bfdbfe" },
+  pago_confirmado:{ bg: "#f0fdf4", color: "#166534",  border: "#bbf7d0" },
+  entregado:      { bg: "#f0fdf4", color: "#166534",  border: "#bbf7d0" },
+  cancelado:      { bg: "#fef2f2", color: "#991b1b",  border: "#fecaca" },
+  // legacy
+  pendiente:      { bg: "#fff7ed", color: "#9a3412",  border: "#fed7aa" },
+  confirmado:     { bg: "#f0fdf4", color: "#166534",  border: "#bbf7d0" },
 };
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
@@ -843,7 +846,7 @@ function Pedidos({ toast, usuario }) {
     toast.add(`Estatus actualizado: ${estatus}`);
   };
 
-  const FILTROS = ["todos", "pendiente", "confirmado", "en_proceso", "entregado", "cancelado"];
+  const FILTROS = ["todos", "recibido", "pago_recibido", "pago_confirmado", "entregado", "cancelado"];
 
   return (
     <>
@@ -931,41 +934,52 @@ function Pedidos({ toast, usuario }) {
 }
 
 // ─── Modal Pedido ─────────────────────────────────────────────────────────────
-function getMsgWA(pedido, costoEnvio = "") {
-  const id = pedido.id;
-  const nombre = pedido.nombre;
+function getMsgPagoRecibido(pedido) {
   const tel = pedido.telefono?.replace(/\D/g, "");
-  const entrega = pedido.entrega;
-  const subtotal = pedido.subtotal || 0;
-  const esGratis = entrega === "cdmx" && subtotal >= 8000;
+  const ref = pedido.referencia || `#${pedido.id}`;
+  const msg = `Hola ${pedido.nombre}, recibimos tu comprobante de pago para el pedido ${ref} 💳. Lo estamos verificando y te confirmamos a la brevedad. ¡Gracias por tu compra en Todo en Cajas! 📦`;
+  return `https://wa.me/52${tel}?text=${encodeURIComponent(msg)}`;
+}
 
-  let msg = "";
-  if (entrega === "tienda") {
-    msg = `Hola ${nombre}, recibimos tu pedido #${id} ✅. Ya está siendo procesado. Te avisamos en cuanto esté listo para recoger en tienda. ¡Gracias por tu compra en Todo en Cajas! 📦`;
-  } else if (entrega === "cdmx" && esGratis) {
-    msg = `Hola ${nombre}, recibimos tu pedido #${id} ✅. Tu pedido supera los $8,000 por lo que el envío es *completamente gratis* 🎉. En breve coordinamos la entrega. ¿A qué hora te queda mejor recibirlo?`;
-  } else if (entrega === "cdmx" && !esGratis) {
-    msg = `Hola ${nombre}, recibimos tu pedido #${id} ✅. Para la entrega en CDMX el costo de envío a tu zona es de *$${costoEnvio || "___"}*. ¿Confirmamos el pedido con ese costo?`;
+function getMsgPagoConfirmado(pedido, costoEnvio = "") {
+  const tel = pedido.telefono?.replace(/\D/g, "");
+  const ref = pedido.referencia || `#${pedido.id}`;
+  const esGratis = pedido.entrega === "cdmx" && (pedido.subtotal || 0) >= 8000;
+  let envioMsg = "";
+  if (pedido.entrega === "tienda") {
+    envioMsg = "Tu pedido estará listo para recoger en tienda en breve. 🏪";
+  } else if (pedido.entrega === "cdmx" && esGratis) {
+    envioMsg = "Coordinamos la entrega a domicilio sin costo adicional. 🚚🎉";
+  } else if (pedido.entrega === "cdmx") {
+    envioMsg = `El costo de envío es *$${costoEnvio || "___"}*. Coordinamos la entrega. 🚚`;
   } else {
-    msg = `Hola ${nombre}, recibimos tu pedido #${id} ✅. Para el envío a *${pedido.estado || "tu estado"}* el costo por paquetería es de *$${costoEnvio || "___"}*. ¿Confirmamos?`;
+    envioMsg = `Enviamos tu pedido por paquetería a ${pedido.estado || "tu destino"}. El costo de envío es *$${costoEnvio || "___"}*. 📦`;
   }
-  return { url: `https://wa.me/52${tel}?text=${encodeURIComponent(msg)}`, esGratis, entrega };
+  const msg = `Hola ${pedido.nombre}, ✅ *¡Pago confirmado!* Tu pedido ${ref} ha sido verificado. ${envioMsg} ¡Gracias por tu compra en Todo en Cajas!`;
+  return `https://wa.me/52${tel}?text=${encodeURIComponent(msg)}`;
 }
 
 function getMsgEntregado(pedido) {
   const tel = pedido.telefono?.replace(/\D/g, "");
-  const msg = `Hola ${pedido.nombre}, tu pedido #${pedido.id} fue entregado con éxito ✅. ¡Muchas gracias por tu compra en Todo en Cajas! Si necesitas algo más, aquí estamos 📦`;
+  const ref = pedido.referencia || `#${pedido.id}`;
+  const msg = `Hola ${pedido.nombre}, 🎉 tu pedido ${ref} fue entregado con éxito. ¡Muchas gracias por tu compra en Todo en Cajas! Si necesitas algo más, aquí estamos 📦`;
+  return `https://wa.me/52${tel}?text=${encodeURIComponent(msg)}`;
+}
+
+function getMsgCancelado(pedido) {
+  const tel = pedido.telefono?.replace(/\D/g, "");
+  const ref = pedido.referencia || `#${pedido.id}`;
+  const msg = `Hola ${pedido.nombre}, tu pedido ${ref} fue cancelado porque no recibimos tu comprobante de pago en las 24 horas. Si todavía te interesa, puedes hacer un nuevo pedido en todoencajas.com 📦`;
   return `https://wa.me/52${tel}?text=${encodeURIComponent(msg)}`;
 }
 
 function ModalPedido({ pedido, onClose, onCambiarEstatus }) {
-  const [estatus, setEstatus]     = useState(pedido.estatus);
+  const [estatus, setEstatus]       = useState(pedido.estatus);
   const [notas, setNotas]         = useState(pedido.notas || "");
   const [costoEnvio, setCostoEnvio] = useState("");
   const ec = ESTATUS_COLORES[estatus] || ESTATUS_COLORES.pendiente;
   const items = typeof pedido.items === "string" ? JSON.parse(pedido.items) : pedido.items || [];
   const necesitaCosto = (pedido.entrega === "cdmx" && (pedido.subtotal || 0) < 8000) || pedido.entrega === "foraneo";
-  const waInfo = getMsgWA(pedido, costoEnvio);
 
   return (
     <div className="modal-ov" onClick={onClose}>
@@ -1006,44 +1020,55 @@ function ModalPedido({ pedido, onClose, onCambiarEstatus }) {
             </div>
           </div>
 
+          {/* Comprobante de pago */}
+          {pedido.comprobante_url && (
+            <div style={{ background: "#f0fdf4", border: "1.5px solid #bbf7d0", borderRadius: 12, padding: "14px 16px" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#166534", textTransform: "uppercase", letterSpacing: ".8px", marginBottom: 10 }}>
+                💳 Comprobante de pago
+              </div>
+              <a href={pedido.comprobante_url} target="_blank" rel="noopener noreferrer"
+                style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", border: "1.5px solid #bbf7d0", borderRadius: 10, padding: "10px 14px", textDecoration: "none", color: "#166534", fontSize: 13, fontWeight: 700 }}>
+                📎 Ver comprobante subido por el cliente
+              </a>
+            </div>
+          )}
+
           {/* Notificar al cliente por WhatsApp */}
-          <div style={{ background: "#f0fdf4", border: "1.5px solid #bbf7d0", borderRadius: 12, padding: "14px 16px" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#166534", textTransform: "uppercase", letterSpacing: ".8px", marginBottom: 10 }}>
+          <div style={{ background: "#fafaf8", border: "1.5px solid #f0ede8", borderRadius: 12, padding: "14px 16px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".8px", marginBottom: 10 }}>
               💬 Notificar al cliente por WhatsApp
             </div>
 
-            {/* Si necesita costo de envío, mostrar campo */}
             {necesitaCosto && (
               <div style={{ marginBottom: 10 }}>
                 <label style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: ".8px", display: "block", marginBottom: 4 }}>
                   Costo de envío a cotizar ($)
                 </label>
-                <input
-                  type="number"
-                  placeholder="Ej. 150"
-                  value={costoEnvio}
-                  onChange={e => setCostoEnvio(e.target.value)}
-                  style={{ border: "1.5px solid #e5e1db", borderRadius: 8, padding: "7px 12px", fontSize: 14, fontFamily: "Inter,sans-serif", outline: "none", width: "100%" }}
-                />
-                <p style={{ fontSize: 11, color: "#aaa", marginTop: 4 }}>Llena el costo antes de enviar el mensaje al cliente.</p>
+                <input type="number" placeholder="Ej. 150" value={costoEnvio} onChange={e => setCostoEnvio(e.target.value)}
+                  style={{ border: "1.5px solid #e5e1db", borderRadius: 8, padding: "7px 12px", fontSize: 14, fontFamily: "Inter,sans-serif", outline: "none", width: "100%" }} />
               </div>
             )}
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {/* Botón confirmar pedido */}
-              <a href={waInfo.url} target="_blank" rel="noopener noreferrer"
-                style={{ background: "#25D366", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
-                <span>💬</span>
-                {pedido.entrega === "tienda" ? "Confirmar — Recoger en tienda"
-                  : waInfo.esGratis ? "Confirmar — Envío gratis CDMX 🎉"
-                  : pedido.entrega === "cdmx" ? "Confirmar — Cotizar envío CDMX"
-                  : "Confirmar — Cotizar envío foráneo"}
+              {/* Pago recibido */}
+              <a href={getMsgPagoRecibido(pedido)} target="_blank" rel="noopener noreferrer"
+                style={{ background: "#1e40af", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
+                <span>💳</span> Avisar: Comprobante recibido
               </a>
-
-              {/* Botón entregado */}
+              {/* Pago confirmado */}
+              <a href={getMsgPagoConfirmado(pedido, costoEnvio)} target="_blank" rel="noopener noreferrer"
+                style={{ background: "#25D366", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
+                <span>✅</span> Avisar: Pago confirmado
+              </a>
+              {/* Entregado */}
               <a href={getMsgEntregado(pedido)} target="_blank" rel="noopener noreferrer"
                 style={{ background: "#166534", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
-                <span>✅</span> Notificar entrega al cliente
+                <span>🎉</span> Avisar: Pedido entregado
+              </a>
+              {/* Cancelado */}
+              <a href={getMsgCancelado(pedido)} target="_blank" rel="noopener noreferrer"
+                style={{ background: "#dc2626", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
+                <span>❌</span> Avisar: Pedido cancelado
               </a>
             </div>
           </div>
@@ -1053,11 +1078,11 @@ function ModalPedido({ pedido, onClose, onCambiarEstatus }) {
             <label>Estatus del pedido</label>
             <select className="estatus-select" value={estatus} onChange={e => setEstatus(e.target.value)}
               style={{ borderColor: ec.border, color: ec.color, background: ec.bg }}>
-              <option value="pendiente">Pendiente</option>
-              <option value="confirmado">Confirmado</option>
-              <option value="en_proceso">En proceso</option>
-              <option value="entregado">Entregado</option>
-              <option value="cancelado">Cancelado</option>
+              <option value="recibido">📥 Recibido</option>
+              <option value="pago_recibido">💳 Pago recibido</option>
+              <option value="pago_confirmado">✅ Pago confirmado</option>
+              <option value="entregado">🎉 Entregado</option>
+              <option value="cancelado">❌ Cancelado</option>
             </select>
           </div>
 
