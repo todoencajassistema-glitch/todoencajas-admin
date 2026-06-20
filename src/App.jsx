@@ -527,6 +527,7 @@ function ModalProducto({ prod, onClose, onSaved, toast }) {
     stock:       prod?.stock       || "",
     material:    prod?.material    || "",
     resistencia:    prod?.resistencia    || "",
+    flauta:         prod?.flauta         || "",
     cantidad_atado: prod?.cantidad_atado || "",
     precio_atado:   prod?.precio_atado   || "",
     largo:       prod?.largo       || "",
@@ -591,12 +592,15 @@ function ModalProducto({ prod, onClose, onSaved, toast }) {
       stock:       parseInt(form.stock)    || 0,
       material:    form.material,
       resistencia: form.resistencia,
+      flauta:      form.flauta || null,
       largo:       parseFloat(form.largo)    || null,
       ancho:       parseFloat(form.ancho)    || null,
       alto:        parseFloat(form.alto)     || null,
       descripcion: form.descripcion,
       activo:      form.activo,
       visible_online: form.visible_online,
+      precio_atado:    form.precio_atado    ? parseFloat(form.precio_atado)  : null,
+      cantidad_atado:  form.cantidad_atado  ? parseInt(form.cantidad_atado)  : null,
       imagenes:    form.imagenes,
     };
     if (esNuevo) await sb.post("productos", data);
@@ -721,24 +725,65 @@ function ModalProducto({ prod, onClose, onSaved, toast }) {
               </select>
             </div>
             {/* Campo dinámico según material */}
+            {/* Caple, SBS, PET → Calibre */}
             {["Caple","SBS","PET"].includes(form.material) && (
               <div className="field">
                 <label>Calibre</label>
                 <input placeholder="Ej. 14pt, 18pt" value={form.resistencia} onChange={setF("resistencia")} />
               </div>
             )}
+            {/* Bond → Gramaje */}
             {["Bond"].includes(form.material) && (
               <div className="field">
                 <label>Gramaje</label>
                 <input placeholder="Ej. 90g/m², 120g/m²" value={form.resistencia} onChange={setF("resistencia")} />
               </div>
             )}
-            {["Microcorrugado","Corrugado","Doble corrugado"].includes(form.material) && (
+            {/* Corrugado, Doble corrugado → Resistencia + Flauta C/B */}
+            {["Corrugado","Doble corrugado"].includes(form.material) && (<>
               <div className="field">
                 <label>Resistencia</label>
                 <input placeholder="Ej. ECT-32, BCT-150kg" value={form.resistencia} onChange={setF("resistencia")} />
               </div>
-            )}
+              <div className="field">
+                <label>Flauta</label>
+                <select value={form.flauta} onChange={setF("flauta")}>
+                  <option value="">Selecciona…</option>
+                  <option value="C">C</option>
+                  <option value="B">B</option>
+                </select>
+              </div>
+            </>)}
+            {/* Microcorrugado → Resistencia + Flauta F/E */}
+            {["Microcorrugado"].includes(form.material) && (<>
+              <div className="field">
+                <label>Resistencia</label>
+                <input placeholder="Ej. ECT-32, BCT-150kg" value={form.resistencia} onChange={setF("resistencia")} />
+              </div>
+              <div className="field">
+                <label>Flauta</label>
+                <select value={form.flauta} onChange={setF("flauta")}>
+                  <option value="">Selecciona…</option>
+                  <option value="F">F</option>
+                  <option value="E">E</option>
+                </select>
+              </div>
+            </>)}
+            {/* Lámina → Resistencia + Flauta C/B */}
+            {["Lámina"].includes(form.material) && (<>
+              <div className="field">
+                <label>Resistencia</label>
+                <input placeholder="Ej. ECT-32, BCT-150kg" value={form.resistencia} onChange={setF("resistencia")} />
+              </div>
+              <div className="field">
+                <label>Flauta</label>
+                <select value={form.flauta} onChange={setF("flauta")}>
+                  <option value="">Selecciona…</option>
+                  <option value="C">C</option>
+                  <option value="B">B</option>
+                </select>
+              </div>
+            </>)}
 
             <div className="field form-full">
               <label>Descripción</label>
