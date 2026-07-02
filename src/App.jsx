@@ -344,7 +344,7 @@ function Dashboard({ toast }) {
   useEffect(() => {
     Promise.all([
       sb.get("productos", "?select=id,activo,stock&activo=eq.true"),
-      sb.get("pedidos", "?select=id,estatus,subtotal&order=created_at.desc&limit=100"),
+      sb.get("pedidos", "?select=id,referencia,estatus,subtotal&order=created_at.desc&limit=100"),
     ]).then(([prods, peds]) => {
       const totalProds   = prods.length;
       const stockBajo    = prods.filter(p => p.stock <= 5).length;
@@ -943,7 +943,7 @@ function Pedidos({ toast, usuario }) {
                     const ec = ESTATUS_COLORES[ped.estatus] || ESTATUS_COLORES.pendiente;
                     return (
                       <tr key={ped.id}>
-                        <td style={{ fontFamily: "monospace", color: "#aaa", fontSize: 12 }}>#{ped.id}</td>
+                        <td style={{ fontFamily: "monospace", color: "#E8681A", fontSize: 12, fontWeight: 700 }}>{ped.referencia || `#${ped.id}`}</td>
                         <td>
                           <div style={{ fontWeight: 700 }}>{ped.nombre}</div>
                           <div style={{ fontSize: 11, color: "#aaa" }}>{ped.telefono}</div>
@@ -1063,7 +1063,7 @@ function ModalPedido({ pedido, onClose, onCambiarEstatus }) {
     <div className="modal-ov" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Pedido #{pedido.id}</h3>
+          <h3>{pedido.referencia || `Pedido #${pedido.id}`}</h3>
           <button className="btn btn-secondary btn-sm" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1127,45 +1127,31 @@ function ModalPedido({ pedido, onClose, onCambiarEstatus }) {
               </div>
             )}
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {/* Pago recibido */}
-              <a href={getMsgPagoRecibido(pedido)} target="_blank" rel="noopener noreferrer"
-                style={{ background: "#1e40af", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
-                <span>💳</span> Avisar: Comprobante recibido
-              </a>
-              {/* Pago confirmado */}
-              <a href={getMsgPagoConfirmado(pedido, costoEnvio)} target="_blank" rel="noopener noreferrer"
-                style={{ background: "#25D366", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
-                <span>✅</span> Avisar: Pago confirmado
-              </a>
-              {/* En preparación */}
-              <a href={getMsgEnPreparacion(pedido)} target="_blank" rel="noopener noreferrer"
-                style={{ background: "#854d0e", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
-                <span>📦</span> Avisar: En preparación
-              </a>
-              {/* En camino */}
-              <a href={getMsgEnCamino(pedido, guia, paqueteria)} target="_blank" rel="noopener noreferrer"
-                style={{ background: "#1e40af", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
-                <span>🚚</span> Avisar: En camino
-              </a>
-              {/* Listo para recoger — solo tienda */}
-              {pedido.entrega === "tienda" && (
-                <a href={getMsgListoRecoger(pedido)} target="_blank" rel="noopener noreferrer"
-                  style={{ background: "#166534", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
-                  <span>📬</span> Avisar: Listo para recoger
-                </a>
-              )}
-              {/* Entregado */}
-              <a href={getMsgEntregado(pedido)} target="_blank" rel="noopener noreferrer"
-                style={{ background: "#166534", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
-                <span>🎉</span> Avisar: Pedido entregado
-              </a>
-              {/* Cancelado */}
-              <a href={getMsgCancelado(pedido)} target="_blank" rel="noopener noreferrer"
-                style={{ background: "#dc2626", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
-                <span>❌</span> Avisar: Pedido cancelado
-              </a>
-            </div>
+            {/* Botón inteligente según estatus actual */}
+            {(() => {
+              const btnConfig = {
+                recibido:        { href: getMsgPagoRecibido(pedido),              bg: "#1e40af", ico: "💳", label: "Avisar: Pedido recibido" },
+                pago_recibido:   { href: getMsgPagoRecibido(pedido),              bg: "#1e40af", ico: "💳", label: "Avisar: Comprobante recibido" },
+                pago_confirmado: { href: getMsgPagoConfirmado(pedido, costoEnvio),bg: "#25D366", ico: "✅", label: "Avisar: Pago confirmado" },
+                en_preparacion:  { href: getMsgEnPreparacion(pedido),             bg: "#854d0e", ico: "📦", label: "Avisar: En preparación" },
+                en_camino:       { href: getMsgEnCamino(pedido, guia, paqueteria),bg: "#1e40af", ico: "🚚", label: "Avisar: En camino" },
+                listo_recoger:   { href: getMsgListoRecoger(pedido),              bg: "#166534", ico: "📬", label: "Avisar: Listo para recoger" },
+                entregado:       { href: getMsgEntregado(pedido),                 bg: "#166534", ico: "🎉", label: "Avisar: Pedido entregado" },
+                cancelado:       { href: getMsgCancelado(pedido),                 bg: "#dc2626", ico: "❌", label: "Avisar: Pedido cancelado" },
+              };
+              const btn = btnConfig[estatus] || btnConfig.recibido;
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <a href={btn.href} target="_blank" rel="noopener noreferrer"
+                    style={{ background: btn.bg, color: "#fff", borderRadius: 10, padding: "12px 14px", fontSize: 14, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
+                    <span>{btn.ico}</span> {btn.label}
+                  </a>
+                  <p style={{ fontSize: 11, color: "#aaa", margin: 0 }}>
+                    💡 Primero guarda los cambios, luego envía el WhatsApp al cliente.
+                  </p>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Estatus */}
@@ -1221,7 +1207,7 @@ function Reportes() {
 
   useEffect(() => {
     Promise.all([
-      sb.get("pedidos", "?select=id,estatus,subtotal,items,created_at&order=created_at.desc"),
+      sb.get("pedidos", "?select=id,referencia,estatus,subtotal,items,created_at&order=created_at.desc"),
       sb.get("productos", "?select=id,nombre,stock,imagenes&activo=eq.true&order=stock.asc&limit=5"),
     ]).then(([pedidos, stockBajo]) => {
       const entregados = pedidos.filter(p => p.estatus === "entregado");
@@ -1385,13 +1371,37 @@ function BottomNav({ usuario, pagina, setPagina, onLogout }) {
 
 
 export default function AdminApp() {
-  const [usuario, setUsuario] = useState(null);
-  const [pagina, setPagina]   = useState("dashboard");
+  const [usuario, setUsuario] = useState(() => {
+    try {
+      const saved = localStorage.getItem("tec_usuario");
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+  const [pagina, setPagina] = useState(() => {
+    try {
+      return localStorage.getItem("tec_pagina") || "dashboard";
+    } catch { return "dashboard"; }
+  });
   const toast = useToast();
 
   const onLogin = (u) => {
     setUsuario(u);
-    setPagina(u.rol === "admin" ? "dashboard" : "pedidos");
+    localStorage.setItem("tec_usuario", JSON.stringify(u));
+    const pag = u.rol === "admin" ? "dashboard" : "pedidos";
+    setPagina(pag);
+    localStorage.setItem("tec_pagina", pag);
+  };
+
+  const onLogout = () => {
+    setUsuario(null);
+    localStorage.removeItem("tec_usuario");
+    localStorage.removeItem("tec_pagina");
+  };
+
+  // Sync pagina to localStorage on change
+  const cambiarPagina = (p) => {
+    setPagina(p);
+    localStorage.setItem("tec_pagina", p);
   };
 
   if (!usuario) return (
@@ -1408,7 +1418,7 @@ export default function AdminApp() {
     <>
       <style>{css}</style>
       <div className="layout">
-        <Sidebar usuario={usuario} pagina={pagina} setPagina={setPagina} onLogout={() => setUsuario(null)} />
+        <Sidebar usuario={usuario} pagina={pagina} setPagina={cambiarPagina} onLogout={onLogout} />
         <div className="content">
           {pagina === "dashboard" && usuario.rol === "admin" && <><div className="page-header"><span className="page-title">📊 Dashboard</span></div><Dashboard toast={toast}/></>}
           {pagina === "productos" && usuario.rol === "admin" && <Productos toast={toast} />}
@@ -1416,7 +1426,7 @@ export default function AdminApp() {
           {pagina === "reportes"  && usuario.rol === "admin" && <><div className="page-header"><span className="page-title">📈 Reportes</span></div><Reportes/></>}
           {pagina === "ajustes"   && usuario.rol === "admin" && <><div className="page-header"><span className="page-title">⚙️ Ajustes</span></div><Ajustes usuario={usuario} toast={toast}/></>}
         </div>
-        <BottomNav usuario={usuario} pagina={pagina} setPagina={setPagina} onLogout={() => setUsuario(null)} />
+        <BottomNav usuario={usuario} pagina={pagina} setPagina={cambiarPagina} onLogout={onLogout} />
       </div>
       <ToastContainer toasts={toast.toasts} />
     </>
