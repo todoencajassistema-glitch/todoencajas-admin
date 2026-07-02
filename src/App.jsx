@@ -50,14 +50,16 @@ function fmt(n) { return new Intl.NumberFormat("es-MX", { style: "currency", cur
 function fmtDate(d) { return new Date(d).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
 
 const ESTATUS_COLORES = {
-  recibido:       { bg: "#fff7ed", color: "#9a3412",  border: "#fed7aa" },
-  pago_recibido:  { bg: "#eff6ff", color: "#1e40af",  border: "#bfdbfe" },
-  pago_confirmado:{ bg: "#f0fdf4", color: "#166534",  border: "#bbf7d0" },
-  entregado:      { bg: "#f0fdf4", color: "#166534",  border: "#bbf7d0" },
-  cancelado:      { bg: "#fef2f2", color: "#991b1b",  border: "#fecaca" },
-  // legacy
-  pendiente:      { bg: "#fff7ed", color: "#9a3412",  border: "#fed7aa" },
-  confirmado:     { bg: "#f0fdf4", color: "#166534",  border: "#bbf7d0" },
+  recibido:        { bg: "#fff7ed", color: "#9a3412", border: "#fed7aa" },
+  pago_recibido:   { bg: "#eff6ff", color: "#1e40af", border: "#bfdbfe" },
+  pago_confirmado: { bg: "#f0fdf4", color: "#166534", border: "#bbf7d0" },
+  en_preparacion:  { bg: "#fefce8", color: "#854d0e", border: "#fde68a" },
+  en_camino:       { bg: "#eff6ff", color: "#1e40af", border: "#bfdbfe" },
+  listo_recoger:   { bg: "#f0fdf4", color: "#166534", border: "#bbf7d0" },
+  entregado:       { bg: "#f0fdf4", color: "#166534", border: "#bbf7d0" },
+  cancelado:       { bg: "#fef2f2", color: "#991b1b", border: "#fecaca" },
+  pendiente:       { bg: "#fff7ed", color: "#9a3412", border: "#fed7aa" },
+  confirmado:      { bg: "#f0fdf4", color: "#166534", border: "#bbf7d0" },
 };
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
@@ -840,7 +842,10 @@ function Pedidos({ toast, usuario }) {
 
   const filtrados = pedidos.filter(p => filtro === "todos" || p.estatus === filtro);
 
-  const cambiarEstatus = async (id, estatus, notas) => {
+  const cambiarEstatus = async (id, estatus, notas, guia, paqueteria) => {
+    const payload = { estatus, notas };
+    if (guia) payload.numero_guia = guia;
+    if (paqueteria) payload.paqueteria = paqueteria;
     const pedidoActual = pedidos.find(p => p.id === id);
 
     // Si cambia a "confirmado" y antes NO era confirmado → descontar stock
@@ -885,13 +890,13 @@ function Pedidos({ toast, usuario }) {
       }
     }
 
-    await sb.patch("pedidos", id, { estatus, notas });
-    setPedidos(prev => prev.map(p => p.id === id ? { ...p, estatus, notas } : p));
-    setDetalle(prev => prev ? { ...prev, estatus, notas } : null);
+    await sb.patch("pedidos", id, payload);
+    setPedidos(prev => prev.map(p => p.id === id ? { ...p, ...payload } : p));
+    setDetalle(prev => prev ? { ...prev, ...payload } : null);
     toast.add(`Estatus actualizado: ${estatus}`);
   };
 
-  const FILTROS = ["todos", "recibido", "pago_recibido", "pago_confirmado", "entregado", "cancelado"];
+  const FILTROS = ["todos", "recibido", "pago_recibido", "pago_confirmado", "en_preparacion", "en_camino", "listo_recoger", "entregado", "cancelado"];
 
   return (
     <>
@@ -979,7 +984,33 @@ function Pedidos({ toast, usuario }) {
 }
 
 // ─── Modal Pedido ─────────────────────────────────────────────────────────────
-function getMsgPagoRecibido(pedido) {
+function getMsgEnPreparacion(pedido) {
+  const tel = pedido.telefono?.replace(/\D/g, "");
+  const ref = pedido.referencia || `#${pedido.id}`;
+  const msg = `Hola ${pedido.nombre}, 📦 tu pedido ${ref} está en preparación. En breve te avisamos cuando esté listo. ¡Gracias por tu compra en Todo en Cajas!`;
+  return `https://wa.me/52${tel}?text=${encodeURIComponent(msg)}`;
+}
+
+function getMsgEnCamino(pedido, guia="", paqueteria="") {
+  const tel = pedido.telefono?.replace(/\D/g, "");
+  const ref = pedido.referencia || `#${pedido.id}`;
+  let msg = "";
+  if (pedido.entrega === "cdmx") {
+    msg = `Hola ${pedido.nombre}, 🚚 tu pedido ${ref} va en camino. Nuestro equipo lo entregará hoy en tu domicilio. ¡Estamos cerca!`;
+  } else {
+    msg = `Hola ${pedido.nombre}, 📦 tu pedido ${ref} fue enviado por paquetería${paqueteria ? ` *${paqueteria}*` : ""}. ${guia ? `Número de guía: *${guia}*` : ""} ¡Pronto llegará a tu destino!`;
+  }
+  return `https://wa.me/52${tel}?text=${encodeURIComponent(msg)}`;
+}
+
+function getMsgListoRecoger(pedido) {
+  const tel = pedido.telefono?.replace(/\D/g, "");
+  const ref = pedido.referencia || `#${pedido.id}`;
+  const msg = `Hola ${pedido.nombre}, 📬 ¡Tu pedido ${ref} está listo para recoger! Pasa a nuestra tienda cuando gustes. No olvides tu código de referencia: *${ref}* ¡Te esperamos!`;
+  return `https://wa.me/52${tel}?text=${encodeURIComponent(msg)}`;
+}
+
+
   const tel = pedido.telefono?.replace(/\D/g, "");
   const ref = pedido.referencia || `#${pedido.id}`;
   const msg = `Hola ${pedido.nombre}, recibimos tu comprobante de pago para el pedido ${ref} 💳. Lo estamos verificando y te confirmamos a la brevedad. ¡Gracias por tu compra en Todo en Cajas! 📦`;
@@ -1020,6 +1051,8 @@ function getMsgCancelado(pedido) {
 
 function ModalPedido({ pedido, onClose, onCambiarEstatus }) {
   const [estatus, setEstatus]       = useState(pedido.estatus);
+  const [guia, setGuia]             = useState(pedido.numero_guia || "");
+  const [paqueteria, setPaqueteria] = useState(pedido.paqueteria || "");
   const [notas, setNotas]         = useState(pedido.notas || "");
   const [costoEnvio, setCostoEnvio] = useState("");
   const ec = ESTATUS_COLORES[estatus] || ESTATUS_COLORES.pendiente;
@@ -1105,6 +1138,23 @@ function ModalPedido({ pedido, onClose, onCambiarEstatus }) {
                 style={{ background: "#25D366", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
                 <span>✅</span> Avisar: Pago confirmado
               </a>
+              {/* En preparación */}
+              <a href={getMsgEnPreparacion(pedido)} target="_blank" rel="noopener noreferrer"
+                style={{ background: "#854d0e", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
+                <span>📦</span> Avisar: En preparación
+              </a>
+              {/* En camino */}
+              <a href={getMsgEnCamino(pedido, guia, paqueteria)} target="_blank" rel="noopener noreferrer"
+                style={{ background: "#1e40af", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
+                <span>🚚</span> Avisar: En camino
+              </a>
+              {/* Listo para recoger — solo tienda */}
+              {pedido.entrega === "tienda" && (
+                <a href={getMsgListoRecoger(pedido)} target="_blank" rel="noopener noreferrer"
+                  style={{ background: "#166534", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>📬</span> Avisar: Listo para recoger
+                </a>
+              )}
               {/* Entregado */}
               <a href={getMsgEntregado(pedido)} target="_blank" rel="noopener noreferrer"
                 style={{ background: "#166534", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
@@ -1126,11 +1176,27 @@ function ModalPedido({ pedido, onClose, onCambiarEstatus }) {
               <option value="recibido">📥 Recibido</option>
               <option value="pago_recibido">💳 Pago recibido</option>
               <option value="pago_confirmado">✅ Pago confirmado</option>
+              <option value="en_preparacion">📦 En preparación</option>
+              <option value="en_camino">🚚 En camino</option>
+              <option value="listo_recoger">📬 Listo para recoger</option>
               <option value="entregado">🎉 Entregado</option>
               <option value="cancelado">❌ Cancelado</option>
             </select>
           </div>
 
+          {/* Guía de paquetería — solo si es en_camino y foráneo */}
+          {estatus === "en_camino" && pedido.entrega === "foraneo" && (
+            <>
+              <div className="field">
+                <label>Paquetería</label>
+                <input placeholder="Ej. Estafeta, DHL, FedEx" value={paqueteria} onChange={e=>setPaqueteria(e.target.value)} />
+              </div>
+              <div className="field">
+                <label>Número de guía</label>
+                <input placeholder="Ej. 1234567890" value={guia} onChange={e=>setGuia(e.target.value)} />
+              </div>
+            </>
+          )}
           {/* Notas */}
           <div className="field">
             <label>Notas internas</label>
@@ -1140,7 +1206,7 @@ function ModalPedido({ pedido, onClose, onCambiarEstatus }) {
         </div>
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>Cerrar</button>
-          <button className="btn btn-primary" onClick={() => { onCambiarEstatus(pedido.id, estatus, notas); onClose(); }}>
+          <button className="btn btn-primary" onClick={() => { onCambiarEstatus(pedido.id, estatus, notas, guia, paqueteria); onClose(); }}>
             Guardar cambios
           </button>
         </div>
