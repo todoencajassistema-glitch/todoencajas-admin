@@ -1011,6 +1011,7 @@ function getMsgListoRecoger(pedido) {
 }
 
 
+function getMsgPagoRecibido(pedido) {
   const tel = pedido.telefono?.replace(/\D/g, "");
   const ref = pedido.referencia || `#${pedido.id}`;
   const msg = `Hola ${pedido.nombre}, recibimos tu comprobante de pago para el pedido ${ref} 💳. Lo estamos verificando y te confirmamos a la brevedad. ¡Gracias por tu compra en Todo en Cajas! 📦`;
