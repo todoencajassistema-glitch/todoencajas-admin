@@ -7,8 +7,8 @@ const BUCKET = "productos";
 
 // ─── Usuarios hardcoded (en producción usar Supabase Auth) ───────────────────
 const USUARIOS = [
-  { id: 1, nombre: "Fanny",    password: "TEC-Admin-2026", rol: "admin"    },
-  { id: 2, nombre: "Admin2",   password: "TEC-Admin-2026", rol: "admin"    },
+  { id: 1, nombre: "Fanny",    password: "2014210305", rol: "admin"    },
+  { id: 2, nombre: "Admin2",   password: "2014210305", rol: "admin"    },
   { id: 3, nombre: "Empleado", password: "TEC-Staff-2026", rol: "empleado" },
 ];
 
