@@ -996,7 +996,7 @@ function getMsgEnCamino(pedido, guia="", paqueteria="") {
   const ref = pedido.referencia || `#${pedido.id}`;
   let msg = "";
   if (pedido.entrega === "cdmx") {
-    msg = `Hola ${pedido.nombre}, 🚚 tu pedido ${ref} va en camino. Nuestro equipo lo entregará hoy en tu domicilio. ¡Estamos cerca!`;
+    msg = `Hola ${pedido.nombre}, 🚚 tu pedido ${ref} va en camino, llegará a tu domicilio en el transcurso del día. Si tienes alguna duda, contáctanos por WhatsApp. ¡Gracias por tu compra en Todo en Cajas!`;
   } else {
     msg = `Hola ${pedido.nombre}, 📦 tu pedido ${ref} fue enviado por paquetería${paqueteria ? ` *${paqueteria}*` : ""}. ${guia ? `Número de guía: *${guia}*` : ""} ¡Pronto llegará a tu destino!`;
   }
