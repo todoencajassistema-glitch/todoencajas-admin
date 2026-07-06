@@ -316,6 +316,7 @@ function Sidebar({ usuario, pagina, setPagina, onLogout }) {
     ...(isAdmin ? [
       { id: "dashboard", ico: "📊", label: "Dashboard" },
       { id: "productos", ico: "📦", label: "Productos" },
+      { id: "categorias", ico: "🏷️", label: "Categorías" },
     ] : []),
     { id: "pedidos",   ico: "🛒", label: "Pedidos" },
     ...(isAdmin ? [
@@ -1295,6 +1296,84 @@ function Reportes() {
 }
 
 // ─── Ajustes ──────────────────────────────────────────────────────────────────
+function Categorias({ toast }) {
+  const [categorias, setCategorias] = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [nueva, setNueva]           = useState("");
+
+  useEffect(() => { cargar(); }, []);
+
+  const cargar = async () => {
+    setLoading(true);
+    const data = await sb.get("categorias", "?order=orden,nombre&select=*");
+    setCategorias(data || []);
+    setLoading(false);
+  };
+
+  const agregar = async () => {
+    if (!nueva.trim()) return;
+    await fetch(`${SUPABASE_URL}/rest/v1/categorias`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ nombre: nueva.trim(), activa: true, orden: categorias.length + 1 })
+    });
+    toast.add(`Categoría "${nueva}" agregada ✓`);
+    setNueva("");
+    cargar();
+  };
+
+  const toggleActiva = async (cat) => {
+    await sb.patch("categorias", cat.id, { activa: !cat.activa });
+    toast.add(cat.activa ? `"${cat.nombre}" ocultada` : `"${cat.nombre}" activada`);
+    cargar();
+  };
+
+  const eliminar = async (cat) => {
+    if (!confirm(`¿Eliminar la categoría "${cat.nombre}"?`)) return;
+    await fetch(`${SUPABASE_URL}/rest/v1/categorias?id=eq.${cat.id}`, {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    toast.add(`Categoría "${cat.nombre}" eliminada`);
+    cargar();
+  };
+
+  return (
+    <div className="page-body">
+      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #f0ede8",padding:"24px",maxWidth:560}}>
+        <div style={{fontSize:13,color:"#aaa",marginBottom:20}}>Las categorías activas aparecen como filtros en la tienda en línea.</div>
+
+        {/* Agregar nueva */}
+        <div style={{display:"flex",gap:8,marginBottom:20}}>
+          <input
+            className="inp" placeholder="Nueva categoría…"
+            value={nueva} onChange={e=>setNueva(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&agregar()}
+            style={{flex:1}}
+          />
+          <button className="btn btn-primary" onClick={agregar}>+ Agregar</button>
+        </div>
+
+        {/* Lista */}
+        {loading ? <div style={{color:"#aaa",fontSize:13}}>Cargando...</div> : (
+          categorias.map(cat => (
+            <div key={cat.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #f0ede8",opacity:cat.activa?1:0.5}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div className={`toggle${cat.activa?" on":""}`} onClick={()=>toggleActiva(cat)} style={{cursor:"pointer"}}/>
+                <span style={{fontSize:14,fontWeight:600,color:"#1a1a1a"}}>{cat.nombre}</span>
+                {!cat.activa && <span style={{fontSize:11,color:"#aaa"}}>oculta</span>}
+              </div>
+              <button onClick={()=>eliminar(cat)} style={{background:"none",border:"1px solid #fecaca",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer",color:"#dc2626"}}>
+                Eliminar
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Ajustes({ usuario, toast }) {
   const [usuarios, setUsuarios]       = useState([]);
   const [loading, setLoading]         = useState(true);
@@ -1432,6 +1511,7 @@ function BottomNav({ usuario, pagina, setPagina, onLogout }) {
   const items = [
     ...(isAdmin ? [{ id: "dashboard", ico: "📊", label: "Inicio" }] : []),
     ...(isAdmin ? [{ id: "productos", ico: "📦", label: "Productos" }] : []),
+    ...(isAdmin ? [{ id: "categorias", ico: "🏷️", label: "Categorías" }] : []),
     { id: "pedidos", ico: "🛒", label: "Pedidos" },
     ...(isAdmin ? [{ id: "reportes", ico: "📈", label: "Reportes" }] : []),
     ...(isAdmin ? [{ id: "ajustes", ico: "⚙️", label: "Ajustes" }] : []),
@@ -1498,7 +1578,7 @@ export default function AdminApp() {
     </>
   );
 
-  const PAGE_TITLES = { dashboard: "Dashboard", productos: "Productos", pedidos: "Pedidos", reportes: "Reportes", ajustes: "Ajustes" };
+  const PAGE_TITLES = { dashboard: "Dashboard", productos: "Productos", categorias: "Categorías", pedidos: "Pedidos", reportes: "Reportes", ajustes: "Ajustes" };
 
   return (
     <>
@@ -1507,7 +1587,8 @@ export default function AdminApp() {
         <Sidebar usuario={usuario} pagina={pagina} setPagina={cambiarPagina} onLogout={onLogout} />
         <div className="content">
           {pagina === "dashboard" && usuario.rol === "admin" && <><div className="page-header"><span className="page-title">📊 Dashboard</span></div><Dashboard toast={toast}/></>}
-          {pagina === "productos" && usuario.rol === "admin" && <Productos toast={toast} />}
+          {pagina === "productos"  && usuario.rol === "admin" && <Productos toast={toast} />}
+          {pagina === "categorias" && usuario.rol === "admin" && <><div className="page-header"><span className="page-title">🏷️ Categorías</span></div><Categorias toast={toast} /></>}
           {pagina === "pedidos"   && <Pedidos toast={toast} usuario={usuario} />}
           {pagina === "reportes"  && usuario.rol === "admin" && <><div className="page-header"><span className="page-title">📈 Reportes</span></div><Reportes/></>}
           {pagina === "ajustes"   && usuario.rol === "admin" && <><div className="page-header"><span className="page-title">⚙️ Ajustes</span></div><Ajustes usuario={usuario} toast={toast}/></>}
