@@ -6,11 +6,7 @@ const ORANGE = "#E8681A";
 const BUCKET = "productos";
 
 // ─── Usuarios hardcoded (en producción usar Supabase Auth) ───────────────────
-const USUARIOS = [
-  { id: 1, nombre: "Fanny",    password: "2014210305", rol: "admin"    },
-  { id: 2, nombre: "Admin2",   password: "2014210305", rol: "admin"    },
-  { id: 3, nombre: "Empleado", password: "TEC-Staff-2026", rol: "empleado" },
-];
+// Usuarios cargados desde Supabase
 
 // ─── Supabase helpers ────────────────────────────────────────────────────────
 const sb = {
@@ -272,11 +268,21 @@ function Login({ onLogin }) {
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [err, setErr]   = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    const u = USUARIOS.find(x => x.nombre.toLowerCase() === user.toLowerCase() && x.password === pass);
-    if (u) { onLogin(u); }
-    else { setErr("Usuario o contraseña incorrectos."); }
+  const handleLogin = async () => {
+    if (!user.trim() || !pass.trim()) { setErr("Ingresa usuario y contraseña."); return; }
+    setLoading(true); setErr("");
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/usuarios_admin?nombre=ilike.${encodeURIComponent(user.trim())}&activo=eq.true&select=*`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+      });
+      const data = await r.json();
+      const u = data.find(x => x.nombre.toLowerCase() === user.trim().toLowerCase() && x.password === pass.trim());
+      if (u) { onLogin(u); }
+      else { setErr("Usuario o contraseña incorrectos."); }
+    } catch { setErr("Error de conexión. Intenta de nuevo."); }
+    setLoading(false);
   };
 
   return (
@@ -295,7 +301,9 @@ function Login({ onLogin }) {
         <input className="login-inp" type="password" placeholder="••••••••" value={pass}
           onChange={e => { setPass(e.target.value); setErr(""); }}
           onKeyDown={e => e.key === "Enter" && handleLogin()} />
-        <button className="login-btn" onClick={handleLogin}>Entrar</button>
+        <button className="login-btn" onClick={handleLogin} disabled={loading}>
+          {loading ? "Verificando..." : "Entrar"}
+        </button>
       </div>
     </div>
   );
@@ -1026,9 +1034,9 @@ function getMsgPagoConfirmado(pedido, costoEnvio = "") {
   if (pedido.entrega === "tienda") {
     envioMsg = "Tu pedido estará listo para recoger en tienda en breve. 🏪";
   } else if (pedido.entrega === "cdmx" && esGratis) {
-    envioMsg = "Coordinamos la entrega a domicilio sin costo adicional. 🚚🎉";
+    envioMsg = "En breve nos ponemos en contacto contigo para coordinar la fecha de entrega. 🚚";
   } else if (pedido.entrega === "cdmx") {
-    envioMsg = `El costo de envío es *$${costoEnvio || "___"}*. Coordinamos la entrega. 🚚`;
+    envioMsg = "En breve nos ponemos en contacto contigo para coordinar la fecha de entrega. El costo de envío ya está incluido en tu pago. 🚚";
   } else {
     envioMsg = `Enviamos tu pedido por paquetería a ${pedido.estado || "tu destino"}. El costo de envío es *$${costoEnvio || "___"}*. 📦`;
   }
@@ -1288,55 +1296,132 @@ function Reportes() {
 
 // ─── Ajustes ──────────────────────────────────────────────────────────────────
 function Ajustes({ usuario, toast }) {
+  const [usuarios, setUsuarios]       = useState([]);
+  const [loading, setLoading]         = useState(true);
   const [passActual, setPassActual]   = useState("");
   const [passNueva, setPassNueva]     = useState("");
   const [passConfirm, setPassConfirm] = useState("");
+  // Nuevo usuario
+  const [nuevoNombre, setNuevoNombre] = useState("");
+  const [nuevoPass, setNuevoPass]     = useState("");
+  const [nuevoRol, setNuevoRol]       = useState("empleado");
+  const [mostrarForm, setMostrarForm] = useState(false);
 
-  const cambiarPass = () => {
-    const u = USUARIOS.find(x => x.id === usuario.id);
-    if (u.password !== passActual)  { toast.add("Contraseña actual incorrecta", "error"); return; }
-    if (passNueva !== passConfirm)  { toast.add("Las contraseñas no coinciden", "error"); return; }
-    if (passNueva.length < 8)       { toast.add("Mínimo 8 caracteres", "error"); return; }
-    u.password = passNueva;
+  useEffect(() => { cargarUsuarios(); }, []);
+
+  const cargarUsuarios = async () => {
+    setLoading(true);
+    const data = await sb.get("usuarios_admin", "?order=id&select=id,nombre,rol,activo,created_at");
+    setUsuarios(data || []);
+    setLoading(false);
+  };
+
+  const cambiarPass = async () => {
+    if (passNueva !== passConfirm) { toast.add("Las contraseñas no coinciden", "error"); return; }
+    if (passNueva.length < 6)      { toast.add("Mínimo 6 caracteres", "error"); return; }
+    // Verify current password
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/usuarios_admin?id=eq.${usuario.id}&password=eq.${encodeURIComponent(passActual)}&select=id`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    const d = await r.json();
+    if (!d.length) { toast.add("Contraseña actual incorrecta", "error"); return; }
+    await sb.patch("usuarios_admin", usuario.id, { password: passNueva });
     setPassActual(""); setPassNueva(""); setPassConfirm("");
     toast.add("Contraseña actualizada ✓");
   };
 
+  const crearUsuario = async () => {
+    if (!nuevoNombre.trim()) { toast.add("Escribe un nombre de usuario", "error"); return; }
+    if (nuevoPass.length < 6) { toast.add("Mínimo 6 caracteres", "error"); return; }
+    await fetch(`${SUPABASE_URL}/rest/v1/usuarios_admin`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ nombre: nuevoNombre.trim(), password: nuevoPass, rol: nuevoRol, activo: true })
+    });
+    setNuevoNombre(""); setNuevoPass(""); setNuevoRol("empleado"); setMostrarForm(false);
+    toast.add(`Usuario "${nuevoNombre}" creado ✓`);
+    cargarUsuarios();
+  };
+
+  const toggleActivo = async (u) => {
+    if (u.id === usuario.id) { toast.add("No puedes desactivarte a ti mismo", "error"); return; }
+    await sb.patch("usuarios_admin", u.id, { activo: !u.activo });
+    toast.add(u.activo ? `Usuario "${u.nombre}" desactivado` : `Usuario "${u.nombre}" activado`);
+    cargarUsuarios();
+  };
+
   return (
     <div className="page-body">
-      <div style={{ background: "#fff", borderRadius: 14, border: "1.5px solid #f0ede8", padding: "24px", maxWidth: 480 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 20 }}>🔒 Cambiar contraseña</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Cambiar mi contraseña */}
+      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #f0ede8",padding:"24px",maxWidth:480}}>
+        <div style={{fontSize:15,fontWeight:800,marginBottom:20}}>🔒 Cambiar mi contraseña</div>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <div className="field">
             <label>Contraseña actual</label>
-            <input type="password" value={passActual} onChange={e => setPassActual(e.target.value)} placeholder="••••••••" />
+            <input type="password" value={passActual} onChange={e=>setPassActual(e.target.value)} placeholder="••••••••"/>
           </div>
           <div className="field">
             <label>Nueva contraseña</label>
-            <input type="password" value={passNueva} onChange={e => setPassNueva(e.target.value)} placeholder="Mínimo 8 caracteres" />
+            <input type="password" value={passNueva} onChange={e=>setPassNueva(e.target.value)} placeholder="Mínimo 6 caracteres"/>
           </div>
           <div className="field">
             <label>Confirmar nueva contraseña</label>
-            <input type="password" value={passConfirm} onChange={e => setPassConfirm(e.target.value)} placeholder="Repite la nueva contraseña" />
+            <input type="password" value={passConfirm} onChange={e=>setPassConfirm(e.target.value)} placeholder="Repite la nueva contraseña"/>
           </div>
           <button className="btn btn-primary" onClick={cambiarPass}>Cambiar contraseña</button>
         </div>
       </div>
 
-      <div style={{ background: "#fff", borderRadius: 14, border: "1.5px solid #f0ede8", padding: "24px", maxWidth: 480, marginTop: 16 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>👥 Usuarios del panel</div>
-        {USUARIOS.map(u => (
-          <div key={u.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f0ede8" }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>{u.nombre}</div>
-              <div style={{ fontSize: 11, color: "#aaa" }}>Contraseña: {u.id === usuario.id ? u.password : "••••••••"}</div>
+      {/* Gestión de usuarios */}
+      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #f0ede8",padding:"24px",maxWidth:480,marginTop:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <div style={{fontSize:15,fontWeight:800}}>👥 Usuarios del panel</div>
+          <button className="btn btn-primary btn-sm" onClick={()=>setMostrarForm(f=>!f)}>
+            {mostrarForm ? "Cancelar" : "+ Nuevo usuario"}
+          </button>
+        </div>
+
+        {/* Formulario nuevo usuario */}
+        {mostrarForm && (
+          <div style={{background:"#fafaf8",border:"1.5px solid #f0ede8",borderRadius:10,padding:"16px",marginBottom:16,display:"flex",flexDirection:"column",gap:10}}>
+            <div className="field">
+              <label>Nombre de usuario</label>
+              <input placeholder="Ej. Mitzi" value={nuevoNombre} onChange={e=>setNuevoNombre(e.target.value)}/>
             </div>
-            <span className={`badge ${u.rol === "admin" ? "badge-orange" : "badge-blue"}`}>
-              {u.rol === "admin" ? "Admin" : "Empleado"}
-            </span>
+            <div className="field">
+              <label>Contraseña</label>
+              <input type="password" placeholder="Mínimo 6 caracteres" value={nuevoPass} onChange={e=>setNuevoPass(e.target.value)}/>
+            </div>
+            <div className="field">
+              <label>Rol</label>
+              <select value={nuevoRol} onChange={e=>setNuevoRol(e.target.value)}>
+                <option value="admin">Admin (acceso total)</option>
+                <option value="empleado">Empleado (solo pedidos)</option>
+              </select>
+            </div>
+            <button className="btn btn-primary" onClick={crearUsuario}>Crear usuario</button>
           </div>
-        ))}
-        <p style={{ fontSize: 11, color: "#bbb", marginTop: 10 }}>Para agregar usuarios, edita el archivo y agrega una entrada en USUARIOS.</p>
+        )}
+
+        {/* Lista de usuarios */}
+        {loading ? <div style={{color:"#aaa",fontSize:13}}>Cargando...</div> : (
+          usuarios.map(u => (
+            <div key={u.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #f0ede8",opacity:u.activo?1:0.5}}>
+              <div>
+                <div style={{fontWeight:700,fontSize:13}}>{u.nombre} {u.id===usuario.id&&<span style={{fontSize:10,color:"#aaa"}}>(tú)</span>}</div>
+                <div style={{fontSize:11,color:"#aaa",textTransform:"capitalize"}}>{u.rol}</div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span className={`badge ${u.rol==="admin"?"badge-orange":"badge-blue"}`}>{u.rol==="admin"?"Admin":"Empleado"}</span>
+                {u.id !== usuario.id && (
+                  <button onClick={()=>toggleActivo(u)} style={{background:"none",border:"1px solid #e5e1db",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer",color:u.activo?"#e53935":"#22c55e"}}>
+                    {u.activo ? "Desactivar" : "Activar"}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
