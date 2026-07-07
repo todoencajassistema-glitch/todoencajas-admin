@@ -530,6 +530,12 @@ function Productos({ toast }) {
 // ─── Modal Producto ───────────────────────────────────────────────────────────
 function ModalProducto({ prod, onClose, onSaved, toast }) {
   const esNuevo = !prod;
+  const [categoriasOpts, setCategoriasOpts] = useState([]);
+  useEffect(() => {
+    fetch(`${SUPABASE_URL}/rest/v1/categorias?activa=eq.true&order=orden,nombre&select=nombre`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    }).then(r=>r.json()).then(data=>{ if(data) setCategoriasOpts(data.map(c=>c.nombre)); });
+  }, []);
   const [form, setForm] = useState({
     nombre:      prod?.nombre      || "",
     sku:         prod?.sku         || "",
@@ -669,16 +675,7 @@ function ModalProducto({ prod, onClose, onSaved, toast }) {
               <label>Categoría</label>
               <select value={form.categoria} onChange={setF("categoria")}>
                 <option value="">Sin categoría</option>
-                <option>Saldos</option>
-                <option>Alimentos y Bebidas</option>
-                <option>Material de Embalaje</option>
-                <option>Cajas Armables</option>
-                <option>Cajas para Envío</option>
-                <option>Cajas Especiales</option>
-                <option>Contenedores</option>
-                <option>Relleno</option>
-                <option>Cintas</option>
-                <option>Sobres</option>
+                {categoriasOpts.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div className="field">
